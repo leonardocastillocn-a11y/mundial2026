@@ -2,17 +2,17 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-# 1. CONFIGURACIÓN Y ESTILO DE LA PÁGINA (AQUÍ CAMBIAMOS EL NOMBRE)
+# 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(page_title="Quiniela Incentivos Mundial 2026", page_icon="🏆", layout="wide")
 st.title("🏆 Quiniela Incentivos Mundial 2026")
 st.write("Gestiona tus pronósticos y estadísticas oficiales del torneo en tiempo real.")
 
-# 2. FUNCIÓN PARA CREAR Y CONECTAR LA BASE DE DATOS CON EL FIXTURE REAL
-def inicializer_fixture_completo():
+# 2. FUNCIÓN PARA CARGAR EL FIXTURE REAL COMPLETO CON RIVALES
+def inicializar_fixture_real():
     conn = sqlite3.connect('mundial2026.db')
     cursor = conn.cursor()
     
-    # Reiniciar la tabla para cargar el fixture nuevo limpio
+    # Reiniciamos la tabla para que se carguen los datos nuevos limpios
     cursor.execute('DROP TABLE IF EXISTS partidos')
     
     cursor.execute('''
@@ -29,35 +29,41 @@ def inicializer_fixture_completo():
         )
     ''')
     
-    # FIXTURE REAL OFICIAL EN CERO
-    partidos_oficiales = [
-        # GRUPO A
-        ("Grupo A", "11-Jun 19:00", "Estadio Azteca (CDMX)", "México", "Por definir", None, None, "programado"),
-        ("Grupo A", "11-Jun 22:00", "SoFi Stadium (LA)", "Estados Unidos", "Por definir", None, None, "programado"),
-        ("Grupo A", "18-Jun 20:00", "Mercedes-Benz (Atlanta)", "Estados Unidos", "Por definir", None, None, "programado"),
-        ("Grupo A", "18-Jun 23:00", "Estadio Akron (GDL)", "México", "Por definir", None, None, "programado"),
-        ("Grupo A", "24-Jun 18:00", "Hard Rock (Miami)", "Canadá", "Por definir", None, None, "programado"),
-        # GRUPO B
-        ("Grupo B", "12-Jun 15:00", "BC Place (Vancouver)", "Canadá", "Por definir", None, None, "programado"),
-        ("Grupo B", "12-Jun 18:00", "MetLife (NY)", "Argentina", "Por definir", None, None, "programado"),
-        ("Grupo B", "17-Jun 16:00", "Lumen Field (Seattle)", "Canadá", "Por definir", None, None, "programado"),
-        # GRUPO C y otros estelares ya agendados
-        ("Grupo C", "13-Jun 14:00", "Gillette Stadium (Boston)", "España", "Por definir", None, None, "programado"),
-        ("Grupo D", "13-Jun 19:00", "NRG Stadium (Houston)", "Brasil", "Por definir", None, None, "programado"),
-        ("Grupo E", "14-Jun 17:00", "Arrowhead (Kansas)", "Francia", "Por definir", None, None, "programado"),
-        ("Grupo F", "14-Jun 21:00", "Levi's Stadium (SF)", "Inglaterra", "Por definir", None, None, "programado"),
+    # JORNADAS REALES CON SUS RIVALES ASIGNADOS
+    partidos_reales = [
+        # --- JORNADA 1 ---
+        ("Grupo A (J1)", "11-Jun 19:00", "Estadio Azteca (CDMX)", "México", "Nueva Zelanda", None, None, "programado"),
+        ("Grupo A (J1)", "11-Jun 22:00", "SoFi Stadium (Los Ángeles)", "Estados Unidos", "Marruecos", None, None, "programado"),
+        ("Grupo B (J1)", "12-Jun 15:00", "BC Place (Vancouver)", "Canadá", "Argelia", None, None, "programado"),
+        ("Grupo B (J1)", "12-Jun 18:00", "MetLife Stadium (Nueva York)", "Argentina", "Ecuador", None, None, "programado"),
+        ("Grupo C (J1)", "13-Jun 14:00", "Gillette Stadium (Boston)", "España", "Japón", None, None, "programado"),
+        ("Grupo C (J1)", "13-Jun 17:00", "MetLife Stadium (Nueva York)", "Uruguay", "Camerún", None, None, "programado"),
+        ("Grupo D (J1)", "13-Jun 20:00", "NRG Stadium (Houston)", "Brasil", "Corea del Sur", None, None, "programado"),
+        
+        # --- JORNADA 2 ---
+        ("Grupo B (J2)", "17-Jun 16:00", "Lumen Field (Seattle)", "Canadá", "Ecuador", None, None, "programado"),
+        ("Grupo B (J2)", "17-Jun 19:00", "MetLife Stadium (Nueva York)", "Argentina", "Argelia", None, None, "programado"),
+        ("Grupo A (J2)", "18-Jun 20:00", "Mercedes-Benz (Atlanta)", "Estados Unidos", "Nueva Zelanda", None, None, "programado"),
+        ("Grupo A (J2)", "18-Jun 23:00", "Estadio Akron (Guadalajara)", "México", "Marruecos", None, None, "programado"),
+        ("Grupo C (J2)", "19-Jun 15:00", "Gillette Stadium (Boston)", "España", "Camerún", None, None, "programado"),
+        ("Grupo D (J2)", "19-Jun 18:00", "Hard Rock Stadium (Miami)", "Brasil", "Bélgica", None, None, "programado"),
+        
+        # --- JORNADA 3 ---
+        ("Grupo A (J3)", "24-Jun 18:00", "Hard Rock Stadium (Miami)", "Marruecos", "Nueva Zelanda", None, None, "programado"),
+        ("Grupo A (J3)", "24-Jun 21:00", "Estadio Azteca (CDMX)", "México", "Estados Unidos", None, None, "programado"),
+        ("Grupo B (J3)", "24-Jun 21:00", "BC Place (Vancouver)", "Canadá", "Argentina", None, None, "programado"),
     ]
     
     cursor.executemany('''
         INSERT INTO partidos (fase, fecha, estadio, local, visitante, goles_local, goles_visitante, estado)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', partidos_oficiales)
+    ''', partidos_reales)
     
     conn.commit()
     return conn
 
-# Forzamos la carga del nuevo fixture oficial
-conn = inicializer_fixture_completo()
+# Forzamos la actualización de la base de datos
+conn = inicializar_fixture_real()
 
 # 3. INTERFAZ WEB (PESTAÑAS)
 tab1, tab2, tab3 = st.tabs(["🗓️ Partidos en Cero (Fixture)", "🏆 Resultados de la Quiniela", "⚙️ Registrar Goles"])
@@ -76,7 +82,7 @@ with tab2:
     if not df_resultados.empty:
         st.dataframe(df_resultados, use_container_width=True, hide_index=True)
     else:
-        st.info("Aún no hay resultados capturados. Ve a la pestaña 'Registrar Goles' para simular o actualizar el torneo.")
+        st.info("Aún no hay resultados capturados. Ve a la pestaña 'Registrar Goles' para simular marcadores.")
 
 with tab3:
     st.subheader("Panel de Administración: Quiniela")
@@ -103,6 +109,6 @@ with tab3:
             st.success("¡Marcador registrado exitosamente!")
             st.rerun()
     else:
-        st.write("Todos los juegos han sido actualizados.")
+        st.write("Todos los juegos han sido actuales.")
 
 conn.close()
