@@ -4,13 +4,13 @@ import sqlite3
 import os
 
 # --- CONFIGURACIÓN UX ---
-st.set_page_config(page_title="Quiniela Mundial 2026", layout="wide", page_icon="⚽")
+st.set_page_config(page_title="Quiniela de Incentivos 2026", layout="wide", page_icon="🏆")
 
-# Estilos CSS Pro
+# Estilos Pro
 st.markdown("""
     <style>
-    .metric-card { background-color: #ffffff; padding: 20px; border-radius: 10px; border-left: 5px solid #22c55e; }
-    .stApp { background-color: #f1f5f9; }
+    .stApp { background-color: #f8fafc; }
+    .header-box { background-color: #1e293b; padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -30,17 +30,7 @@ def load_data():
     return pd.DataFrame()
 
 # --- INTERFAZ ---
-st.title("🏆 Mundial 2026: Quiniela Pro")
-
-# --- SECCIÓN DE INCENTIVO (NUEVO) ---
-with st.container():
-    col_metric1, col_metric2 = st.columns(2)
-    with col_metric1:
-        st.metric(label="Pozo Acumulado Actual", value="$15,500 MXN", delta="¡Sigue creciendo!")
-    with col_metric2:
-        st.info("💡 **Incentivo:** ¡El usuario con más aciertos se llevará el 70% del pozo acumulado al finalizar la fase de grupos!")
-
-st.markdown("---")
+st.markdown('<div class="header-box"><h1>🏆 Quiniela de Incentivos</h1><p>Premio al ganador: <b>$3,000 MXN</b> | ¡Sé el Campeón!</p></div>', unsafe_allow_html=True)
 
 df = load_data()
 if df.empty:
@@ -51,6 +41,7 @@ else:
     with col_input:
         st.subheader("📝 Registrar Resultado")
         match_id = st.selectbox("Seleccionar Partido:", df['match_number'].unique())
+        
         c1, c2 = st.columns(2)
         g_l = c1.number_input("Goles Local", min_value=0, step=1)
         g_v = c2.number_input("Goles Visitante", min_value=0, step=1)
@@ -60,23 +51,26 @@ else:
             conn.execute('REPLACE INTO resultados VALUES (?, ?, ?)', (match_id, g_l, g_v))
             conn.commit()
             conn.close()
-            st.toast("Marcador guardado", icon="✅")
+            st.toast("Resultado registrado", icon="✅")
             st.rerun()
 
     with col_viz:
-        st.subheader("⚽ Marcadores y Ganadores")
+        st.subheader("⚽ Tabla de Posiciones y Resultados")
         res_df = pd.read_sql('SELECT * FROM resultados', get_db_connection())
         df_final = df.merge(res_df, left_on='match_number', right_on='match_id', how='left')
         
-        def get_winner(row):
+        def determinar_estado(row):
             if pd.isna(row['goles_local']): return "Pendiente"
-            if row['goles_local'] > row['goles_visitante']: return str(row['Local'])
-            if row['goles_local'] < row['goles_visitante']: return str(row['Visitante'])
+            if row['goles_local'] > row['goles_visitante']: return f"🏆 Campeón: {row['Local']}"
+            if row['goles_local'] < row['goles_visitante']: return f"🏆 Campeón: {row['Visitante']}"
             return "Empate"
         
-        df_final['Ganador'] = df_final.apply(get_winner, axis=1)
+        df_final['Resultado_Final'] = df_final.apply(determinar_estado, axis=1)
         
         st.dataframe(
-            df_final[['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante', 'Ganador']],
+            df_final[['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante', 'Resultado_Final']],
             use_container_width=True, hide_index=True
         )
+
+st.markdown("---")
+st.caption("Quiniela de Incentivos 2026 - ¡El ganador se lleva el gran premio!")
