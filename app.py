@@ -25,15 +25,11 @@ def load_data():
         return None, f"Archivo {archivo} no encontrado."
     
     df = pd.read_csv(archivo)
-    
-    # Verificamos si tenemos la columna necesaria para sacar los equipos
     if 'teams' in df.columns:
         df[['Local', 'Visitante']] = df['teams'].str.split(' v ', n=1, expand=True)
     else:
-        # Creamos columnas por defecto si no existen
         df['Local'] = "TBD"
         df['Visitante'] = "TBD"
-        
     return df, None
 
 # --- INTERFAZ ---
@@ -45,11 +41,9 @@ if error:
     st.error(error)
 else:
     col_input, col_viz = st.columns([1, 2])
-
     with col_input:
         st.subheader("📝 Registrar Resultado")
         match_id = st.selectbox("Seleccionar Partido:", df['match_number'].unique())
-        
         c1, c2 = st.columns(2)
         g_l = c1.number_input("Goles Local", min_value=0, step=1)
         g_v = c2.number_input("Goles Visitante", min_value=0, step=1)
@@ -68,12 +62,7 @@ else:
         conn.close()
         
         df_final = df.merge(res_df, left_on='match_number', right_on='match_id', how='left')
-        
-        # Mostrar datos de forma segura
         df_final['Local_Display'] = df_final['Local'].apply(lambda x: f"{obtener_bandera(x)} {x}")
         df_final['Visitante_Display'] = df_final['Visitante'].apply(lambda x: f"{obtener_bandera(x)} {x}")
         
-        st.dataframe(
-            df_final[['match_number', 'Local_Display', 'goles_local', 'goles_visitante', 'Visitante_Display']],
-            use_container_width=True, hide_index=True
-        )
+        st.dataframe(df_final[['match_number', 'Local_Display', 'goles_local', 'goles_visitante', 'Visitante_Display']], use_container_width=True, hide_index=True)
