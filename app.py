@@ -3,10 +3,9 @@ import pandas as pd
 import sqlite3
 import os
 
-# --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Quiniela de Incentivos 2026", layout="wide", page_icon="🏆")
+st.set_page_config(page_title="Quiniela Pro 2026", layout="wide")
 
-# Diccionario normalizado según los nombres que muestra tu CSV
+# Diccionario de dueños (mantenemos los nombres estándar)
 participantes = {
     "Andres": ["Congo", "Irak", "Egypt", "Panama", "Austria", "Iran", "Germany", "England"],
     "Roberto": ["Haiti", "Curacao", "Tunisia", "Uzbekistan", "Morocco", "South Korea", "Netherlands", "Portugal"],
@@ -17,71 +16,56 @@ participantes = {
 }
 
 def obtener_dueno(equipo):
-    if not isinstance(equipo, str): return "-"
-    for persona, equipos in participantes.items():
-        if equipo.strip() in equipos:
-            return persona
-    return "Ninguno"
+    equipo = str(equipo).strip().lower()
+    for persona, lista in participantes.items():
+        for item in lista:
+            if equipo == item.lower():
+                return persona
+    return "Sin dueño"
 
-# --- BASE DE DATOS ---
-def get_db_connection():
-    return sqlite3.connect('resultados_quiniela.db')
-
-# --- LÓGICA ---
 @st.cache_data
 def load_data():
     archivo = 'FIFA2026_schedule_Fixtures.csv'
-    if not os.path.exists(archivo):
-        return pd.DataFrame(), "Archivo no encontrado"
-    
     df = pd.read_csv(archivo)
     if 'teams' in df.columns:
         df[['Local', 'Visitante']] = df['teams'].str.split(' v ', n=1, expand=True)
-    else:
-        df['Local'] = "TBD"
-        df['Visitante'] = "TBD"
-    return df, None
+    return df
 
 # --- INTERFAZ ---
-st.markdown('<div style="background:#1e293b; padding:20px; border-radius:10px; color:white;"><h1>🏆 Quiniela de Incentivos</h1><p>Premio: <b>$3,000 MXN</b> | ¡El ganador es el Campeón!</p></div>', unsafe_allow_html=True)
+st.markdown("<h1>🏆 Quiniela de Incentivos: $3,000 MXN</h1>", unsafe_allow_html=True)
+df = load_data()
 
-df, error = load_data()
+# Procesar resultados
+conn = sqlite3.connect('resultados_quiniela.db')
+res_df = pd.read_sql('SELECT * FROM resultados', conn)
+conn.close()
 
-if error:
-    st.error(error)
-else:
-    col_input, col_viz = st.columns([1, 2])
-    
-    with col_input:
-        st.subheader("📝 Registrar Resultado")
-        match_id = st.selectbox("Partido:", df['match_number'].unique())
-        g_l = st.number_input("Goles Local", min_value=0, step=1)
-        g_v = st.number_input("Goles Visitante", min_value=0, step=1)
-        
-        if st.button("Guardar Marcador", type="primary"):
-            conn = get_db_connection()
-            conn.execute('REPLACE INTO resultados VALUES (?, ?, ?)', (match_id, g_l, g_v))
-            conn.commit()
-            conn.close()
-            st.rerun()
+df_final = df.merge(res_df, left_on='match_number', right_on='match_id', how='left')
 
-    with col_viz:
-        st.subheader("⚽ Tabla Oficial de Ganadores")
-        conn = get_db_connection()
-        res_df = pd.read_sql('SELECT * FROM resultados', conn)
+# lógica mejorada
+def logica_ganador(row):
+    if pd.isna(row['goles_local']): return "Pendiente", "N/A"
+    if row['goles_local'] > row['goles_visitante']: 
+        return row['Local'], obtener_dueno(row['Local'])
+    if row['goles_local'] < row['goles_visitante']: 
+        return row['Visitante'], obtener_dueno(row['Visitante'])
+    return "Empate", "N/A"
+
+df_final[['Campeon', 'Propietario']] = df_final.apply(lambda r: pd.Series(logica_ganador(r)), axis=1)
+
+# Mostrar
+st.dataframe(df_final[['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante', 'Campeon', 'Propietario']], 
+             use_container_width=True, hide_index=True)
+
+# Registro
+with st.sidebar:
+    st.subheader("Registrar")
+    m = st.selectbox("Partido", df['match_number'].unique())
+    gl = st.number_input("Goles Local", 0)
+    gv = st.number_input("Goles Visita", 0)
+    if st.button("Guardar"):
+        conn = sqlite3.connect('resultados_quiniela.db')
+        conn.execute('REPLACE INTO resultados VALUES (?, ?, ?)', (m, gl, gv))
+        conn.commit()
         conn.close()
-        
-        df_final = df.merge(res_df, left_on='match_number', right_on='match_id', how='left')
-        
-        def calcular_resultado(row):
-            if pd.isna(row['goles_local']): return "Pendiente", "-"
-            if row['goles_local'] > row['goles_visitante']: return row['Local'], obtener_dueno(row['Local'])
-            if row['goles_local'] < row['goles_visitante']: return row['Visitante'], obtener_dueno(row['Visitante'])
-            return "Empate", "-"
-
-        df_final[['Campeon', 'Propietario']] = df_final.apply(lambda row: pd.Series(calcular_resultado(row)), axis=1)
-        
-        st.dataframe(
-            df_final[['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante', 'Campeon', 'Propietario']], 
-            use_container_width=True, hide_index=True
-        )
+        st.rerun()
