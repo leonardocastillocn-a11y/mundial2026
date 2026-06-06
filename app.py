@@ -6,14 +6,14 @@ import os
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Quiniela de Incentivos 2026", layout="wide", page_icon="🏆")
 
-# Mapeo de dueños basado en 571395.jpg
+# Diccionario normalizado según los nombres que muestra tu CSV
 participantes = {
-    "Andres": ["Congo", "Irak", "Egipto", "Panama", "Austria", "Iran", "Alemania", "Inglaterra"],
-    "Roberto": ["Haiti", "Curazao", "Tunez", "Uzbekistan", "Marruecos", "Corea del Sur", "Paises Bajos", "Portugal"],
-    "Ruben": ["Cabo Verde", "Turquia", "Arabia Saudita", "Sudafrica", "Croacia", "Ecuador", "Belgica", "Francia"],
-    "Leo": ["Nueva Zelanda", "Ghana", "Paraguay", "Grecia", "Uruguay", "Senegal", "Mexico", "Argentina"],
-    "Yahir": ["Republica Checa", "Bosnia", "Argelia", "Costa de Marfil", "Colombia", "Suiza", "USA", "Espana"],
-    "Heri": ["Jordania", "Suecia", "Noruega", "Catar", "Japon", "Canada", "Brazil"]
+    "Andres": ["Congo", "Irak", "Egypt", "Panama", "Austria", "Iran", "Germany", "England"],
+    "Roberto": ["Haiti", "Curacao", "Tunisia", "Uzbekistan", "Morocco", "South Korea", "Netherlands", "Portugal"],
+    "Ruben": ["Cabo Verde", "Turkey", "Saudi Arabia", "South Africa", "Croatia", "Ecuador", "Belgium", "France"],
+    "Leo": ["New Zealand", "Ghana", "Paraguay", "Greece", "Uruguay", "Senegal", "Mexico", "Argentina"],
+    "Yahir": ["Czech Republic", "Bosnia", "Algeria", "Côte d'Ivoire", "Colombia", "Switzerland", "USA", "Spain"],
+    "Heri": ["Jordan", "Sweden", "Norway", "Qatar", "Japan", "Austria", "Canada", "Brazil"]
 }
 
 def obtener_dueno(equipo):
@@ -27,7 +27,7 @@ def obtener_dueno(equipo):
 def get_db_connection():
     return sqlite3.connect('resultados_quiniela.db')
 
-# --- LÓGICA DE DATOS ---
+# --- LÓGICA ---
 @st.cache_data
 def load_data():
     archivo = 'FIFA2026_schedule_Fixtures.csv'
@@ -73,7 +73,6 @@ else:
         
         df_final = df.merge(res_df, left_on='match_number', right_on='match_id', how='left')
         
-        # Identificar ganador y propietario
         def calcular_resultado(row):
             if pd.isna(row['goles_local']): return "Pendiente", "-"
             if row['goles_local'] > row['goles_visitante']: return row['Local'], obtener_dueno(row['Local'])
