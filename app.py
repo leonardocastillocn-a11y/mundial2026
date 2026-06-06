@@ -3,8 +3,25 @@ import pandas as pd
 import sqlite3
 import os
 
-# --- CONFIGURACIÓN UX ---
-st.set_page_config(page_title="Quiniela de Incentivos 2026", layout="wide", page_icon="⚽")
+# --- CONFIGURACIÓN ---
+st.set_page_config(page_title="Quiniela de Incentivos 2026", layout="wide", page_icon="🏆")
+
+# Mapeo de dueños basado en 571395.jpg
+participantes = {
+    "Andres": ["Congo", "Irak", "Egipto", "Panama", "Austria", "Iran", "Alemania", "Inglaterra"],
+    "Roberto": ["Haiti", "Curazao", "Tunez", "Uzbekistan", "Marruecos", "Corea del Sur", "Paises Bajos", "Portugal"],
+    "Ruben": ["Cabo Verde", "Turquia", "Arabia Saudita", "Sudafrica", "Croacia", "Ecuador", "Belgica", "Francia"],
+    "Leo": ["Nueva Zelanda", "Ghana", "Paraguay", "Grecia", "Uruguay", "Senegal", "Mexico", "Argentina"],
+    "Yahir": ["Republica Checa", "Bosnia", "Argelia", "Costa de Marfil", "Colombia", "Suiza", "USA", "Espana"],
+    "Heri": ["Jordania", "Suecia", "Noruega", "Catar", "Japon", "Canada", "Brazil"]
+}
+
+def obtener_dueno(equipo):
+    if not isinstance(equipo, str): return "-"
+    for persona, equipos in participantes.items():
+        if equipo.strip() in equipos:
+            return persona
+    return "Ninguno"
 
 # --- BASE DE DATOS ---
 def get_db_connection():
@@ -18,12 +35,11 @@ def load_data():
         return pd.DataFrame(), "Archivo no encontrado"
     
     df = pd.read_csv(archivo)
-    # Ajuste: Si existe la columna 'teams', la separamos
     if 'teams' in df.columns:
         df[['Local', 'Visitante']] = df['teams'].str.split(' v ', n=1, expand=True)
     else:
-        df['Local'] = "Equipo A"
-        df['Visitante'] = "Equipo B"
+        df['Local'] = "TBD"
+        df['Visitante'] = "TBD"
     return df, None
 
 # --- INTERFAZ ---
@@ -50,14 +66,23 @@ else:
             st.rerun()
 
     with col_viz:
-        st.subheader("⚽ Tabla Oficial")
+        st.subheader("⚽ Tabla Oficial de Ganadores")
         conn = get_db_connection()
         res_df = pd.read_sql('SELECT * FROM resultados', conn)
         conn.close()
         
         df_final = df.merge(res_df, left_on='match_number', right_on='match_id', how='left')
+        
+        # Identificar ganador y propietario
+        def calcular_resultado(row):
+            if pd.isna(row['goles_local']): return "Pendiente", "-"
+            if row['goles_local'] > row['goles_visitante']: return row['Local'], obtener_dueno(row['Local'])
+            if row['goles_local'] < row['goles_visitante']: return row['Visitante'], obtener_dueno(row['Visitante'])
+            return "Empate", "-"
+
+        df_final[['Campeon', 'Propietario']] = df_final.apply(lambda row: pd.Series(calcular_resultado(row)), axis=1)
+        
         st.dataframe(
-            df_final[['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante']], 
-            use_container_width=True, 
-            hide_index=True
+            df_final[['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante', 'Campeon', 'Propietario']], 
+            use_container_width=True, hide_index=True
         )
