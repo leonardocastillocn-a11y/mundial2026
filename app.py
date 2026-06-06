@@ -10,14 +10,12 @@ st.set_page_config(page_title="Quiniela Mundial 2026", layout="wide", page_icon=
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
-    .css-1r6slp0 { padding-top: 1rem; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- BASE DE DATOS ---
 def get_db_connection():
-    conn = sqlite3.connect('resultados_quiniela.db')
-    return conn
+    return sqlite3.connect('resultados_quiniela.db')
 
 # Crear tabla si no existe
 conn = get_db_connection()
@@ -29,29 +27,30 @@ conn.close()
 # --- LÓGICA DE DATOS ---
 @st.cache_data
 def load_data():
-    if os.path.exists('FIFA2026_schedule.csv'):
-        df = pd.read_csv('FIFA2026_schedule.csv')
-        # Normalización de equipos si existe la columna
+    # USAMOS EL ARCHIVO QUE CONTIENE LOS FIXTURES (EQUIPOS)
+    archivo = 'FIFA2026_schedule_Fixtures.csv'
+    
+    if os.path.exists(archivo):
+        df = pd.read_csv(archivo)
+        # Verificamos si la columna existe y separamos los equipos
         if 'teams' in df.columns:
             df[['Local', 'Visitante']] = df['teams'].str.split(' v ', n=1, expand=True)
-        else:
-            df['Local'] = "Equipo A"
-            df['Visitante'] = "Equipo B"
         return df
-    return pd.DataFrame()
+    else:
+        return pd.DataFrame()
 
 # --- INTERFAZ ---
 st.title("🏆 Mundial 2026: Panel Pro")
 df = load_data()
 
 if df.empty:
-    st.error("No se encontró el archivo 'FIFA2026_schedule.csv' en el repositorio.")
+    st.error("Error: Asegúrate de que el archivo 'FIFA2026_schedule_Fixtures.csv' esté en tu repositorio.")
 else:
-    # Layout de columnas para mejor UX
     col_input, col_viz = st.columns([1, 2])
 
     with col_input:
         st.markdown("### 📝 Registrar Marcador")
+        # Aseguramos que el selectbox use el match_number correcto
         match_id = st.selectbox("Seleccionar Partido:", df['match_number'].unique())
         
         c1, c2 = st.columns(2)
@@ -63,16 +62,16 @@ else:
             conn.execute('REPLACE INTO resultados VALUES (?, ?, ?)', (match_id, g_l, g_v))
             conn.commit()
             conn.close()
-            st.toast("¡Resultado guardado con éxito!", icon="✅")
+            st.toast("¡Resultado guardado!", icon="✅")
             st.rerun()
 
     with col_viz:
         st.markdown("### ⚽ Calendario Oficial")
-        # Unir resultados
+        # Unir resultados de la base de datos con el calendario
         res_df = pd.read_sql('SELECT * FROM resultados', get_db_connection())
         df_final = df.merge(res_df, left_on='match_number', right_on='match_id', how='left')
         
-        # Calcular ganador
+        # Lógica del ganador
         def get_winner(row):
             if pd.isna(row['goles_local']): return "Pendiente"
             if row['goles_local'] > row['goles_visitante']: return str(row['Local'])
@@ -81,13 +80,9 @@ else:
         
         df_final['Ganador'] = df_final.apply(get_winner, axis=1)
         
-        # Mostrar tabla sin índice para look profesional
+        # Mostrar tabla profesional
         st.dataframe(
             df_final[['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante', 'Ganador', 'stadium']],
             use_container_width=True,
             hide_index=True
         )
-
-# Footer
-st.markdown("---")
-st.caption("Sistema de Quiniela 2026 - Versión Profesional")
