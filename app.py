@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 
-# Configuración de la página
 st.set_page_config(page_title="Gestión de Quiniela 2026", layout="wide")
 
-# 1. Función para registrar resultados en la base de datos
+# 1. Función para registrar resultados
 def registrar_resultado(match_id, goles_local, goles_visitante):
     conn = sqlite3.connect('resultados_quiniela.db')
     cursor = conn.cursor()
@@ -15,54 +14,38 @@ def registrar_resultado(match_id, goles_local, goles_visitante):
     conn.commit()
     conn.close()
 
-# 2. Función para obtener resultados desde la base de datos
-def obtener_resultados():
-    try:
-        conn = sqlite3.connect('resultados_quiniela.db')
-        res_df = pd.read_sql('SELECT * FROM resultados', conn)
-        conn.close()
-        return res_df
-    except:
-        return pd.DataFrame(columns=['match_id', 'goles_local', 'goles_visitante'])
-
 st.title("⚽ Panel de Administración: Quiniela")
 
-# 3. Carga y procesamiento del archivo CSV
+# 2. Carga del archivo
 try:
     df = pd.read_csv('FIFA2026_schedule.csv')
     
-    # Separar equipos solo si la columna existe
-    if 'teams' in df.columns:
+    # Si no existe la columna 'teams', la creamos vacía para que el código no falle
+    if 'teams' not in df.columns:
+        df['Local'] = "Por definir"
+        df['Visitante'] = "Por definir"
+    else:
         df[['Local', 'Visitante']] = df['teams'].str.split(' v ', n=1, expand=True)
-    
-    # 4. Formulario de entrada
-    st.subheader("Registrar Marcador")
-    match_list = df['match_number'].unique()
-    match_number = st.selectbox("Selecciona partido:", match_list)
-    
+
+    # 3. Formulario
+    match_number = st.selectbox("Selecciona partido:", df['match_number'].unique())
     col1, col2 = st.columns(2)
     goles_l = col1.number_input("Goles Local", min_value=0, step=1)
     goles_v = col2.number_input("Goles Visitante", min_value=0, step=1)
 
     if st.button("Guardar Resultado"):
         registrar_resultado(match_number, goles_l, goles_v)
-        st.success(f"Marcador guardado para {match_number}")
+        st.success("¡Marcador guardado!")
 
-    # 5. Visualización con resultados integrados
-    res_df = obtener_resultados()
+    # 4. Mostrar tabla de forma segura
+    res_df = pd.read_sql('SELECT * FROM resultados', sqlite3.connect('resultados_quiniela.db')) if True else pd.DataFrame()
     df_final = df.merge(res_df, left_on='match_number', right_on='match_id', how='left')
 
-    def determinar_ganador(row):
-        if pd.isna(row['goles_local']): return "Pendiente"
-        if row['goles_local'] > row['goles_visitante']: return str(row['Local'])
-        if row['goles_local'] < row['goles_visitante']: return str(row['Visitante'])
-        return "Empate"
-
-    df_final['Ganador'] = df_final.apply(determinar_ganador, axis=1)
-
-    st.subheader("Calendario y Marcadores en Tiempo Real")
-    st.dataframe(df_final[['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante', 'Ganador']], use_container_width=True)
+    st.subheader("Calendario y Marcadores")
+    # Mostramos solo las columnas que sabemos que existen
+    columnas_a_mostrar = [c for c in ['match_number', 'Local', 'goles_local', 'goles_visitante', 'Visitante', 'group'] if c in df_final.columns]
+    st.dataframe(df_final[columnas_a_mostrar], use_container_width=True)
 
 except Exception as e:
-    st.error("Error al cargar la aplicación. Asegúrate de que 'FIFA2026_schedule.csv' esté en la raíz.")
-    st.write("Detalle del error:", e)
+    st.error("Error al procesar el archivo. Revisa que el nombre sea exacto.")
+    st.write(e)
