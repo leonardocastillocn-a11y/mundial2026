@@ -1,62 +1,76 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from st_aggrid import AgGrid, GridOptionsBuilder
+import os
 
-# Configuración con diseño ancho
-st.set_page_config(page_title="Quiniela Pro 2026", layout="wide")
+# --- CONFIGURACIÓN PRO ---
+st.set_page_config(page_title="Quiniela Pro 2026", layout="wide", page_icon="🏆")
 
-# CSS Personalizado para un look corporativo (Estilo oscuro/moderno)
+# Estilo para que se vea elegante
 st.markdown("""
     <style>
-    .main { background-color: #0f172a; }
-    .stApp { color: #f8fafc; }
-    h1 { color: #38bdf8; font-weight: 800; text-align: center; margin-bottom: 2rem; }
-    .css-1r6slb0 { border: 1px solid #334155; border-radius: 10px; padding: 20px; }
+    .stApp { background-color: #0f172a; color: #f8fafc; }
+    h1 { color: #38bdf8; text-align: center; }
+    .stDataFrame { border: 1px solid #334155; border-radius: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
-# Lógica de Datos
+# Base de datos
+def get_db():
+    return sqlite3.connect('resultados_quiniela.db')
+
+# Cargar Datos desde tu archivo CSV
 @st.cache_data
-def get_data():
+def load_data():
+    # Asegúrate de que el archivo se llame exactamente así
     df = pd.read_csv('FIFA2026_schedule_Fixtures.csv')
-    if 'teams' in df.columns:
-        df[['Local', 'Visitante']] = df['teams'].str.split(' v ', n=1, expand=True)
     return df
 
 st.title("🏆 TAHONA EMPERADORES | QUINIELA 2026")
 
-df = get_data()
+df = load_data()
 
-# Layout en dos columnas de alto nivel
-col1, col2 = st.columns([1, 3], gap="large")
+# Layout
+col1, col2 = st.columns([1, 2.5], gap="large")
 
 with col1:
-    st.markdown("### 📝 Registrar Marcador")
-    m_id = st.selectbox("Selecciona Partido:", df['match_number'].unique())
-    col_a, col_b = st.columns(2)
-    g_l = col_a.number_input("Local", 0)
-    g_v = col_b.number_input("Visitante", 0)
+    st.subheader("📝 Registrar Resultado")
+    m_id = st.selectbox("Selecciona Partido (Match #):", df['match_number'].unique())
+    c_a, c_b = st.columns(2)
+    g_l = c_a.number_input("Goles Local", 0, step=1)
+    g_v = c_b.number_input("Goles Visitante", 0, step=1)
     
-    if st.button("Actualizar Marcador", use_container_width=True):
-        conn = sqlite3.connect('resultados_quiniela.db')
+    if st.button("Guardar Marcador", type="primary", use_container_width=True):
+        conn = get_db()
         conn.execute('REPLACE INTO resultados VALUES (?, ?, ?)', (m_id, g_l, g_v))
         conn.commit()
         conn.close()
+        st.success("¡Guardado!")
         st.rerun()
 
 with col2:
-    st.markdown("### 📊 Calendario y Resultados")
-    conn = sqlite3.connect('resultados_quiniela.db')
+    st.subheader("📊 Calendario Completo")
+    conn = get_db()
     res = pd.read_sql('SELECT * FROM resultados', conn)
     conn.close()
     
-    df_final = df.merge(res, left_on='match_number', right_on='match_id', how='left').fillna("-")
+    # Unir resultados con el CSV original usando match_number
+    df_final = df.merge(res, left_on='match_number', right_on='match_id', how='left')
     
-    # Configuración de Tabla Profesional (AgGrid)
-    gb = GridOptionsBuilder.from_dataframe(df_final)
-    gb.configure_pagination(paginationAutoPageSize=True)
-    gb.configure_default_column(sortable=True, filter=True)
-    grid_options = gb.build()
+    # Rellenar campos vacíos para que no se vea "None"
+    df_final[['goles_local', 'goles_visitante']] = df_final[['goles_local', 'goles_visitante']].fillna(0).astype(int)
     
-    AgGrid(df_final, gridOptions=grid_options, theme='streamlit', fit_columns_on_grid_load=True)
+    # Mostrar la tabla limpia con tus columnas reales
+    st.dataframe(
+        df_final[['date', 'match_number', 'teams', 'group', 'stadium', 'goles_local', 'goles_visitante']],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "match_number": "Partido",
+            "teams": "Enfrentamiento",
+            "group": "Grupo",
+            "stadium": "Estadio",
+            "goles_local": "Goles Local",
+            "goles_visitante": "Goles Visita"
+        }
+    )
