@@ -1,65 +1,62 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-import os
+from st_aggrid import AgGrid, GridOptionsBuilder
 
-st.set_page_config(page_title="Quiniela 2026", layout="centered", page_icon="⚽")
+# Configuración con diseño ancho
+st.set_page_config(page_title="Quiniela Pro 2026", layout="wide")
 
-def get_db_connection():
-    return sqlite3.connect('resultados_quiniela.db')
+# CSS Personalizado para un look corporativo (Estilo oscuro/moderno)
+st.markdown("""
+    <style>
+    .main { background-color: #0f172a; }
+    .stApp { color: #f8fafc; }
+    h1 { color: #38bdf8; font-weight: 800; text-align: center; margin-bottom: 2rem; }
+    .css-1r6slb0 { border: 1px solid #334155; border-radius: 10px; padding: 20px; }
+    </style>
+""", unsafe_allow_html=True)
 
+# Lógica de Datos
 @st.cache_data
-def load_data():
-    archivo = 'FIFA2026_schedule_Fixtures.csv'
-    if not os.path.exists(archivo): return pd.DataFrame()
-    df = pd.read_csv(archivo)
+def get_data():
+    df = pd.read_csv('FIFA2026_schedule_Fixtures.csv')
     if 'teams' in df.columns:
         df[['Local', 'Visitante']] = df['teams'].str.split(' v ', n=1, expand=True)
-    # Convertir fecha a string simple
-    df['date'] = df['date'].astype(str)
     return df
 
-st.title("🏆 Quiniela de Incentivos")
-df = load_data()
+st.title("🏆 TAHONA EMPERADORES | QUINIELA 2026")
 
-# Obtener resultados
-conn = get_db_connection()
-res_df = pd.read_sql('SELECT * FROM resultados', conn)
-conn.close()
+df = get_data()
 
-# --- AGRUPAR POR DÍA ---
-fechas = sorted(df['date'].unique())
+# Layout en dos columnas de alto nivel
+col1, col2 = st.columns([1, 3], gap="large")
 
-for fecha in fechas:
-    with st.expander(f"📅 Fecha: {fecha}"):
-        juegos_del_dia = df[df['date'] == fecha]
-        
-        for _, row in juegos_del_dia.iterrows():
-            res = res_df[res_df['match_id'] == row['match_number']]
-            
-            with st.container(border=True):
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    st.markdown(f"**{row['match_number']}**: {row['Local']} vs {row['Visitante']}")
-                    if not res.empty:
-                        st.success(f"Marcador: {int(res.iloc[0]['goles_local'])} - {int(res.iloc[0]['goles_visitante'])}")
-                    else:
-                        st.warning("Pendiente")
-                with col2:
-                    if st.button("Registrar", key=f"btn_{row['match_number']}"):
-                        st.session_state['edit_match'] = row['match_number']
-                        st.rerun()
-
-# --- MODAL DE REGISTRO ---
-if 'edit_match' in st.session_state:
-    st.divider()
-    st.subheader(f"Registrar {st.session_state['edit_match']}")
-    g_l = st.number_input("Goles Local", 0)
-    g_v = st.number_input("Goles Visitante", 0)
-    if st.button("Guardar"):
-        conn = get_db_connection()
-        conn.execute('REPLACE INTO resultados VALUES (?, ?, ?)', (st.session_state['edit_match'], g_l, g_v))
+with col1:
+    st.markdown("### 📝 Registrar Marcador")
+    m_id = st.selectbox("Selecciona Partido:", df['match_number'].unique())
+    col_a, col_b = st.columns(2)
+    g_l = col_a.number_input("Local", 0)
+    g_v = col_b.number_input("Visitante", 0)
+    
+    if st.button("Actualizar Marcador", use_container_width=True):
+        conn = sqlite3.connect('resultados_quiniela.db')
+        conn.execute('REPLACE INTO resultados VALUES (?, ?, ?)', (m_id, g_l, g_v))
         conn.commit()
         conn.close()
-        del st.session_state['edit_match']
         st.rerun()
+
+with col2:
+    st.markdown("### 📊 Calendario y Resultados")
+    conn = sqlite3.connect('resultados_quiniela.db')
+    res = pd.read_sql('SELECT * FROM resultados', conn)
+    conn.close()
+    
+    df_final = df.merge(res, left_on='match_number', right_on='match_id', how='left').fillna("-")
+    
+    # Configuración de Tabla Profesional (AgGrid)
+    gb = GridOptionsBuilder.from_dataframe(df_final)
+    gb.configure_pagination(paginationAutoPageSize=True)
+    gb.configure_default_column(sortable=True, filter=True)
+    grid_options = gb.build()
+    
+    AgGrid(df_final, gridOptions=grid_options, theme='streamlit', fit_columns_on_grid_load=True)
